@@ -1,5 +1,7 @@
 package it.batch.config;
 
+import java.util.List;
+
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -14,22 +16,39 @@ import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.support.CompositeItemProcessor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestTemplate;
 
-import it.batch.batch.*;
+import it.batch.batch.BookAuthorProcessor;
+import it.batch.batch.BookTitleProcessor;
+import it.batch.batch.BookWriter;
+import it.batch.batch.RestBookReader;
+import it.batch.copydb.BookDbProcessor;
+import it.batch.copydb.BookDbReader;
+import it.batch.copydb.BookDbWriter;
 import it.batch.entity.BookEntity;
-
-import java.util.List;
+import it.batch.entity.NewBookEntity;
 
 @Configuration
 public class BatchConfig {
+	
+	@Autowired
+	private BookDbReader bookDbReader;
+
+	@Autowired
+	private BookDbProcessor bookProcessor;
+
+	@Autowired
+	private BookDbWriter bookDbWriter;
 
     @Bean
-    public Job bookReaderJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+    @Primary
+    Job bookReaderJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
         return new JobBuilder("bookReadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(chunkStep(jobRepository, transactionManager))
@@ -37,11 +56,11 @@ public class BatchConfig {
     }
 
     @Bean
-    public Step chunkStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+    Step chunkStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
         return new StepBuilder("bookReaderStep", jobRepository).<BookEntity, BookEntity>
                         chunk(10, transactionManager)
                 .reader(reader())  // Ora sto chiamando il metodo reader() che sta giu per leggere dal file!
-//                .reader(restBookReader())
+//                .reader(restBookReader()) // Cosi invece chiama restBookReader() per leggere dalla API esposta dal controller!
                 .processor(processor())
                 .writer(writer())
                 .build();
@@ -49,28 +68,20 @@ public class BatchConfig {
     }
 
     @Bean
-    public Step taskletStep(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
-        return new StepBuilder("taskletStep", jobRepository)
-                .tasklet(new BookTasklet(), platformTransactionManager)
-                .build();
-    }
-
-    @Bean
     @StepScope
-    public ItemReader<BookEntity> restBookReader() {
+    ItemReader<BookEntity> restBookReader() {
         return new RestBookReader("http://localhost:8080/book", new RestTemplate());
     }
 
-    @StepScope
     @Bean
-    public ItemWriter<BookEntity> writer() {
+    @StepScope
+    ItemWriter<BookEntity> writer() {
         return new BookWriter();
     }
 
-
-    @StepScope
     @Bean
-    public ItemProcessor<BookEntity, BookEntity> processor() {
+    @StepScope
+    ItemProcessor<BookEntity, BookEntity> processor() {
         CompositeItemProcessor<BookEntity, BookEntity> processor = new CompositeItemProcessor<>();
         processor.setDelegates(List.of(new BookTitleProcessor(), new BookAuthorProcessor()));
         return processor;
@@ -87,6 +98,23 @@ public class BatchConfig {
                 .fieldSetMapper(new BeanWrapperFieldSetMapper<>() {{
                     setTargetType(BookEntity.class);
                 }})
+                .build();
+    }
+    
+    @Bean
+    Job copyBookJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+        return new JobBuilder("copyBookJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(copyBookStep(jobRepository, transactionManager))
+                .build();
+    }
+
+    @Bean
+    Step copyBookStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+        return new StepBuilder("copyBookStep", jobRepository).<BookEntity, NewBookEntity>chunk(10, transactionManager)
+                .reader(bookDbReader)
+                .processor(bookProcessor)
+                .writer(bookDbWriter)
                 .build();
     }
 }
