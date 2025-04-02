@@ -19,7 +19,6 @@ import org.springframework.batch.item.support.CompositeItemProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.client.RestTemplate;
@@ -46,8 +45,20 @@ public class BatchConfig {
 	@Autowired
 	private BookDbWriter bookDbWriter;
 
+	
+	/* Questo è un Bean combinato, se voglio far eseguire i due JOB uno dopo l'altro. Se scommento questo, devo commentare i due JOB*/
+	
+  /*  @Bean
+    Job combinedJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+        return new JobBuilder("combinedJob", jobRepository)
+                .incrementer(new RunIdIncrementer())
+                .start(chunkStep(jobRepository, transactionManager))  // Esegue il primo job (lettura da file)
+                .next(copyBookStep(jobRepository, transactionManager)) // Dopo il completamento, esegue il secondo job (copia su DB)
+                .build();
+    }*/
+	
+	
     @Bean
-    @Primary
     Job bookReaderJob(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
         return new JobBuilder("bookReadJob", jobRepository)
                 .incrementer(new RunIdIncrementer())

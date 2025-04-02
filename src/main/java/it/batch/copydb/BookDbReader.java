@@ -20,10 +20,13 @@ public class BookDbReader implements ItemReader<BookEntity> {
 
     @Override
     public BookEntity read() throws Exception {
-        if (bookIterator == null || !bookIterator.hasNext()) {
+        // Se l'iteratore non è stato inizializzato, lo inizializza con i dati del database
+        if (bookIterator == null) {
             List<BookEntity> books = bookRepository.findAll();
             bookIterator = books.iterator();
         }
+
+        // Restituisce il prossimo elemento o null se non ci sono più dati
         return bookIterator.hasNext() ? bookIterator.next() : null;
     }
 }
