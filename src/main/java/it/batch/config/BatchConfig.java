@@ -81,7 +81,7 @@ public class BatchConfig {
     @Bean
     @StepScope
     ItemReader<BookEntity> restBookReader() {
-        return new RestBookReader("http://localhost:8080/book", new RestTemplate());
+        return new RestBookReader("http://localhost:8082/book", new RestTemplate());
     }
 
     @Bean
